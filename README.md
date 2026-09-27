@@ -10,6 +10,21 @@ is most of the field, has no ranking at all. The 2022 and 2023 results are no lo
 by the API and only survive as XLS and PDF exports. This tool collects all of it and ranks
 everyone the same way.
 
+## Personal use only
+
+The results belong to endu.net. Its "Download the results" dialog states:
+
+> Information, data and images, including results and rankings, may be used for personal
+> use only, therefore their commercial use and redistribution, even partial, in any way or
+> form without express authorization is prohibited. Downloads are tracked.
+
+This tool is for looking at the results yourself. Don't publish, share or sell what it
+produces, in whole or in part, without endu.net's authorization. For any other use, ask
+endu.net.
+
+The output also contains names, birth years and times of real people. This repository
+holds only code and no endu.net data; `.gitignore` excludes `.db` and `.csv` files.
+
 ## Build
 
 Needs Rust 1.88 or newer.
@@ -203,8 +218,3 @@ endu.net endpoints used (all public, no authentication):
 endu's XLS exports store text as UTF-16 in a way the `calamine` reader returns byte by byte,
 so `endu` decodes it again. The PDFs are read by glyph position, using the header row
 repeated on every page.
-
-## Data
-
-The output contains names, birth years and times of real people, as published by endu.net.
-This repository holds only code; `.gitignore` excludes `.db` and `.csv` files.

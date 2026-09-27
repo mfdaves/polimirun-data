@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// Download Polimirun results from endu.net.
+/// Download Polimirun results from endu.net, for personal use only.
+///
+/// endu.net allows its results and rankings to be used for personal use only:
+/// commercial use and redistribution, even partial, need its express authorization.
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
