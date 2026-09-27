@@ -6,6 +6,8 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::Hash;
 
+pub mod age_grade;
+
 /// Event group holding every Polimirun edition (`endu.net/events/polimirunspring`).
 pub const POLIMIRUN_GROUP: u64 = 6212;
 
@@ -43,6 +45,9 @@ pub struct Row {
     pub real_time: Option<String>,
     /// Chip time in seconds (official time when there is no chip time).
     pub seconds: Option<u32>,
+    /// `seconds` as a percentage of the 10 km standard for the runner's age
+    /// and gender, see [`age_grade`]. `None` without a gender or a plausible age.
+    pub age_grade: Option<f64>,
     pub rank: Option<u32>,
     pub gender_rank: Option<u32>,
     pub general_rank: Option<u32>,
@@ -81,7 +86,7 @@ impl Row {
             "" => col("category").chars().nth(1).filter(|c| matches!(c, 'M' | 'F')).map(String::from),
             g => Some(g.to_uppercase()),
         };
-        Self {
+        let mut row = Self {
             edition_id: edition.id,
             year: edition.year(),
             runner_id: 0,
@@ -96,11 +101,21 @@ impl Row {
             official_time,
             real_time,
             seconds,
+            age_grade: None,
             rank: None,
             gender_rank: None,
             general_rank: None,
             general_gender_rank: None,
-        }
+        };
+        row.age_grade = row.age().zip(row.seconds).and_then(|(age, s)| age_grade::percent(&row.gender, age, s));
+        row
+    }
+
+    /// Age on race day as race year minus year of birth, so possibly one year
+    /// too many. `None` outside 10 to 95, where the year of birth is wrong.
+    fn age(&self) -> Option<u16> {
+        let age = self.year.checked_sub(self.year_of_birth?)?;
+        (10..=95).contains(&age).then_some(age)
     }
 
     /// The time `rank` is based on.
@@ -156,10 +171,7 @@ fn assign_ranks<K: Eq + Hash>(
 pub fn assign_runner_ids(rows: &mut [Row]) {
     let keys: Vec<(String, Option<u16>)> = rows
         .iter()
-        .map(|r| {
-            let yob = r.year_of_birth.filter(|&y| (10..=95).contains(&r.year.saturating_sub(y)));
-            (name_key(&r.name), yob)
-        })
+        .map(|r| (name_key(&r.name), r.age().and(r.year_of_birth)))
         .collect();
 
     let mut births: HashMap<&str, BTreeSet<u16>> = HashMap::new();

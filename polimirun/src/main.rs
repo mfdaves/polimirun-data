@@ -83,6 +83,7 @@ CREATE TABLE results (
     official_time TEXT,
     real_time TEXT,
     seconds INTEGER,
+    age_grade REAL,
     rank INTEGER,
     gender_rank INTEGER,
     general_rank INTEGER,
@@ -204,7 +205,7 @@ fn save(rows: &[Row], path: &Path, format: Format) -> Result<()> {
             db.execute_batch(SQLITE_SCHEMA)?;
             let tx = db.transaction()?;
             let mut insert = tx.prepare(
-                "INSERT INTO results VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                "INSERT INTO results VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             )?;
             for r in rows {
                 insert.execute(rusqlite::params![
@@ -222,6 +223,7 @@ fn save(rows: &[Row], path: &Path, format: Format) -> Result<()> {
                     r.official_time,
                     r.real_time,
                     r.seconds,
+                    r.age_grade,
                     r.rank,
                     r.gender_rank,
                     r.general_rank,

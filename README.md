@@ -57,6 +57,7 @@ Every finisher is one row, with the same columns for both races:
 | `bib`, `name`, `gender`, `year_of_birth`, `team`, `nationality`, `category` | As published. Gender is `M`, `F` or empty. |
 | `official_time`, `real_time` | `H:MM:SS`. Official is gun time, real is chip time. Non-time values such as `DSQ` are kept as published. |
 | `seconds` | Chip time in seconds, or official time when there is no chip time. |
+| `age_grade` | `seconds` as a percentage of the 10 km standard for the runner's age and gender, see below. |
 | `rank`, `gender_rank` | Position in the runner's own race. |
 | `general_rank`, `general_gender_rank` | Position across both races of the edition. |
 
@@ -81,6 +82,29 @@ This is a heuristic. A typo in a name or birth year splits one person in two, an
 people with the same name and birth year become one. Ids are numbered on every export, so
 don't store them elsewhere.
 
+### Age grading
+
+`age_grade` compares runners of different ages and genders: the 10 km standard time for
+the runner's age and gender divided by their time. 100 matches the standard; road-running
+convention calls 90 and above world class, 80 national, 70 regional and 60 local class.
+
+The standards are Alan Jones's 2025 road age standards, with single-age bests by Tom
+Bernhard, approved on 2025-01-10 by the USATF Masters Long Distance Running Council. They
+come from
+[AlanLyttonJones/Age-Grade-Tables](https://github.com/AlanLyttonJones/Age-Grade-Tables)
+(`2025 Files/MaleRoadStd2025.xlsx` and `FemaleRoadStd2025.xlsx`, version 2025-07-27,
+10 km column), released under CC0 1.0, and are copied into
+[`polimirun/src/age_grade.rs`](polimirun/src/age_grade.rs).
+
+- Age is the race year minus the year of birth, so it can be one year too high; the
+  grade is then slightly generous.
+- The course is taken to be exactly 10 km.
+- There is no grade without a gender or with an impossible age (outside 10 to 95), which
+  includes every 2022 and 2023 non-competitive runner.
+- A grade above 100 beats the standard for that age, which in practice means a wrong
+  birth year or someone running on another person's bib. A full download on 2026-09-27
+  had two.
+
 ### SQLite
 
 | Object | |
@@ -101,6 +125,11 @@ FROM non_competitive WHERE year = 2026 AND gender = 'F' LIMIT 10;
 -- One person across the years
 SELECT year, race, official_time, real_time, rank
 FROM results WHERE runner_id = 123 ORDER BY year;
+
+-- Best age-graded results of 2026, leaving out impossible ones
+SELECT name, gender, 2026 - year_of_birth AS age, real_time, age_grade, race
+FROM results WHERE year = 2026 AND age_grade <= 100
+ORDER BY age_grade DESC LIMIT 10;
 
 -- How many runners came back the next edition
 WITH editions AS (
@@ -151,6 +180,8 @@ These come from the source and are left as published:
 - Some non-competitive birth years are impossible (the race year, 1900, `2`). They are
   ignored when matching runners.
 - Nobody checks non-competitive times, and a few look implausible. Nothing is filtered.
+- Two age grades are above 100 (a runner listed as 90 years old at 48:31, another as 63 at
+  32:43): wrong birth years or swapped bibs.
 - In 2023 bib 12969 appears twice.
 
 ## Layout
