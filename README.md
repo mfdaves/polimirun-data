@@ -43,6 +43,7 @@ polimirun results --year 2026 --ranking non-competitive --gender F --top 10
 polimirun results --name rossi                        # a name, across every year
 polimirun results --ranking competitive --out competitive.csv
 polimirun results --out polimirun.db                  # everything, as SQLite
+polimirun runner --db polimirun.db --year 2026 --bib 8275 --born 2000-2004
 ```
 
 `results` options:
@@ -57,8 +58,15 @@ polimirun results --out polimirun.db                  # everything, as SQLite
 | `--out FILE` | Write `.csv`, `.json` or `.db` (SQLite) instead of printing a table. |
 | `-j N` | Result pages downloaded in parallel. Default 8. |
 
-A full download (all editions, about 72,500 rows) takes 5 to 15 seconds. With `-j 1` it
+A full download (all editions, about 72,500 rows) takes 5 to 20 seconds. With `-j 1` it
 takes about a minute. Above 4 there is little gain.
+
+`runner` reads a SQLite file saved with `results --out`, so it doesn't download anything.
+Give it `--year` and `--bib`, or `--name` (it lists the matches when there are several).
+It prints the runner's position in their race, among their gender, their 5-year age group
+and, with `--born FROM-TO`, among runners born in those years; their position across both
+races; how far they finished from the median of their gender and age group; how many
+runners share their time; their other editions; and who crossed the line with them.
 
 ## Output
 
@@ -68,10 +76,15 @@ Every finisher is one row, with the same columns for both races:
 |---|---|
 | `edition_id`, `year` | endu.net edition id and its year. |
 | `runner_id` | The same person across years, see below. |
+| `family_id` | Runners with the same surname who crossed the line together, see below. |
 | `race` | `competitive` or `non_competitive`. |
 | `bib`, `name`, `gender`, `year_of_birth`, `team`, `nationality`, `category` | As published. Gender is `M`, `F` or empty. |
+| `surname` | The first word of the name (endu lists surname first), keeping particles: `DI PRESA`, `DE LA CRUZ`. |
+| `age` | Race year minus year of birth; empty when that is outside 10 to 95. |
+| `country` | `nationality` as an IOC code, see below. |
 | `official_time`, `real_time` | `H:MM:SS`. Official is gun time, real is chip time. Non-time values such as `DSQ` are kept as published. |
 | `seconds` | Chip time in seconds, or official time when there is no chip time. |
+| `start_delay` | Seconds from the gun to crossing the start line (official minus chip time). Empty in races that publish chip time as official time. |
 | `age_grade` | `seconds` as a percentage of the 10 km standard for the runner's age and gender, see below. |
 | `rank`, `gender_rank` | Position in the runner's own race. |
 | `general_rank`, `general_gender_rank` | Position across both races of the edition. |
@@ -96,6 +109,29 @@ their own id.
 This is a heuristic. A typo in a name or birth year splits one person in two, and two
 people with the same name and birth year become one. Ids are numbered on every export, so
 don't store them elsewhere.
+
+### Families
+
+Runners with the same surname who finish in the same race within 10 seconds of each other
+(official time, chained: A to B to C) get the same `family_id`. Groups where two runners
+have the same full name are left out as namesakes or double entries.
+
+Common surnames also finish close together by chance, which is why the window is short:
+comparing with surnames shuffled at random, about 70% of same-surname pairs within 60
+seconds are chance, against about 30% within 10 seconds. Each family has a `chance` value:
+how many runners with that surname would finish that close by luck. Near 0 means almost
+certainly together; above 0.1, possibly not. Couples and mothers with children usually
+have different surnames in Italy, so most of them are not found. Like runner ids, family
+ids are numbered on every export.
+
+### Country codes
+
+Timing companies publish nationality as IOC codes (`GER`), ISO codes (`DEU`) or the first
+letters of the Italian name (`SPA` for Spagna, `SVI` for Svizzera). `country` converts
+these to IOC codes where the meaning is certain, and keeps anything else as published
+(`COR`, `UNI`, `REP`...). `IRA` is read as Iran: it only appears in 2018, 2021 and 2022,
+years without `IRI` or `IRQ`. The list is in
+[`polimirun/src/country.rs`](polimirun/src/country.rs).
 
 ### Age grading
 
@@ -125,10 +161,27 @@ come from
 | Object | |
 |---|---|
 | `results` | One row per finisher, the columns above. |
-| `runners` | One row per person: `runner_id`, `name` (latest spelling), `gender`, `year_of_birth`, `editions`, `first_year`, `last_year`. |
-| `general`, `competitive`, `non_competitive` | Views over `results`, sorted by the matching rank. |
+| `runners` | One row per person: `runner_id`, `name` and `country` (latest edition), `gender`, `year_of_birth`, `editions`, `first_year`, `last_year`. |
+| `families` | `family_id`, `year`, `race`, `surname`, `members`, `official_time` of the last to finish, `chance`. |
+| `general`, `competitive`, `non_competitive` | `results` sorted by the matching rank. |
+| `yearly` | Per year: finishers, change, competitive and non-competitive, share of women and foreigners, countries, median time, winners. |
+| `retention` | Runners who came back to the next edition, and the share of the next field who had run before. |
+| `loyalty` | People by number of editions. |
+| `nations` | People by country. |
+| `surnames` | People by surname. |
+| `time_distribution` | Percentiles and shares under 40, 50 and 60 minutes, per year and race. |
+| `gender_gap` | How much slower women are: winners, fastest 10% and median. |
+| `age_groups` | 5-year age groups by gender: runners, median and best time, mean age grade. |
+| `progression`, `progression_summary` | Each runner's change in time from one edition to their next, and summaries by race. |
+| `start_delay` | Median and longest wait at the start, per race that publishes gun time. |
+| `finish_flow` | Finishers per minute after the gun, same races. |
+| `clubs` | Competitive race clubs: runners, best position, sum of the three best positions. |
+| `data_quality` | How many rows have each known problem. |
 
-Writing to an existing file replaces these objects and leaves anything else in it alone.
+The SQL is in [`polimirun/src/schema.sql`](polimirun/src/schema.sql) and
+[`polimirun/src/views.sql`](polimirun/src/views.sql). Writing to an existing file replaces
+these objects and leaves anything else in it alone. Percentiles take the value at that
+position, without averaging two middle values.
 
 Some queries:
 
@@ -142,23 +195,18 @@ SELECT year, race, official_time, real_time, rank
 FROM results WHERE runner_id = 123 ORDER BY year;
 
 -- Best age-graded results of 2026, leaving out impossible ones
-SELECT name, gender, 2026 - year_of_birth AS age, real_time, age_grade, race
+SELECT name, gender, age, real_time, age_grade, race
 FROM results WHERE year = 2026 AND age_grade <= 100
 ORDER BY age_grade DESC LIMIT 10;
 
--- How many runners came back the next edition
-WITH editions AS (
-    SELECT year, lead(year) OVER (ORDER BY year) AS next_year
-    FROM (SELECT DISTINCT year FROM results)
-)
-SELECT e.year || ' -> ' || e.next_year AS editions,
-       count(DISTINCT a.runner_id) AS runners,
-       count(DISTINCT b.runner_id) AS came_back
-FROM editions e
-JOIN results a ON a.year = e.year
-LEFT JOIN results b ON b.runner_id = a.runner_id AND b.year = e.next_year
-WHERE e.next_year IS NOT NULL
-GROUP BY e.year;
+-- Fastest families of 2026 and their members
+SELECT f.race, f.surname, f.official_time, f.chance, r.name, r.year_of_birth
+FROM families f JOIN results r USING (family_id)
+WHERE f.year = 2026 ORDER BY f.official_time, r.official_time LIMIT 20;
+
+-- Retention and age groups
+SELECT * FROM retention;
+SELECT * FROM age_groups WHERE year = 2026;
 ```
 
 ## Coverage
@@ -190,7 +238,7 @@ Numbers from a download on 2026-09-27.
 These come from the source and are left as published:
 
 - Nationality codes mix standards: Spain is `ESP` or `SPA`, China `CHN` or `CIN`. A few are
-  truncated (`EL`, `MÉX`).
+  truncated (`EL`, `MÉX`). `country` converts the ones whose meaning is certain.
 - In 2017 and 2019 almost every runner is `ITA`, probably a default value.
 - Some non-competitive birth years are impossible (the race year, 1900, `2`). They are
   ignored when matching runners.
@@ -203,7 +251,8 @@ These come from the source and are left as published:
 
 - `endu/`: a small client for endu.net's public results API, with nothing specific to
   Polimirun. It also reads endu's XLS and PDF exports into the same shape as live results.
-- `polimirun/`: the row schema, rankings, runner identity and the CLI.
+- `polimirun/`: the row schema, rankings, runner identity, families, country codes, age
+  grading, the SQLite tables and views, and the CLI.
 
 endu.net endpoints used (all public, no authentication):
 
