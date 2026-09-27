@@ -1,0 +1,11 @@
+[package]
+name = "endu"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal client for the public endu.net results API"
+
+[dependencies]
+calamine = "0.36.1"
+pdf-extract = "0.12.1"
+serde = { version = "1.0.229", features = ["derive"] }
+ureq = { version = "3", features = ["json"] }
